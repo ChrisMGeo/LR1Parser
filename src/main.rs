@@ -1,7 +1,7 @@
 use parser_utils::first::compute_firsts;
 
 use crate::parser_types::{
-    action_goto::generate_parsing_table,
+    action_goto::{generate_parsing_table, print_parsing_table},
     augmented_grammar::AugmentedGrammar,
     lr1state::{format_lr1_state_machine, generate_lr1_statemachine},
     nonterminal::NonTerminalTrait,
@@ -123,5 +123,5 @@ fn main() {
         format_lr1_state_machine(&final_rules, &lr1_state_machine)
     );
     let parsing_table = generate_parsing_table(&final_rules, Some(&lr1_state_machine));
-    println!("{:#?}", parsing_table);
+    print_parsing_table(&parsing_table, 8);
 }
