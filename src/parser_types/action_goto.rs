@@ -301,3 +301,74 @@ pub fn print_parsing_table<
     print!("{}", gotos_b.join("╩"));
     println!("╝");
 }
+
+pub fn parse<
+    Terminal: std::fmt::Debug
+        + TerminalTrait
+        + Copy
+        + Clone
+        + PartialEq
+        + std::hash::Hash
+        + Eq
+        + Ord
+        + PartialOrd,
+    NonTerminal: std::fmt::Debug
+        + NonTerminalTrait
+        + Copy
+        + Clone
+        + PartialEq
+        + std::hash::Hash
+        + Eq
+        + PartialOrd
+        + Ord,
+>(
+    lex_stream: &Vec<Terminal>,
+    rules: &Vec<Rule<Terminal, NonTerminal>>,
+    parsing_table: &ParsingTable<Terminal, NonTerminal>,
+) {
+    let mut lex_stream = lex_stream.clone();
+    let mut state_stack = vec![0];
+    let mut parse_stack: Vec<TerminalOrNonTerminal<Terminal, NonTerminal>> = vec![];
+    loop {
+        println!("{:?}", state_stack);
+        println!("{:?}", parse_stack);
+        let state = state_stack.last().unwrap();
+        let token = lex_stream.first().unwrap();
+        let action = parsing_table.action.get(&(state.clone(), token.clone()));
+        match action {
+            Some(action) => match action {
+                Action::Shift(n) => {
+                    state_stack.push(*n);
+                    parse_stack.push(TerminalOrNonTerminal::Terminal(token.clone()));
+                    lex_stream.remove(0);
+                }
+                Action::Reduce(n) => {
+                    let rule = rules[*n].clone();
+                    let rule_length = rule.rhs.len();
+                    let mut popped = vec![];
+                    for _ in 0..rule_length {
+                        state_stack.pop();
+                        popped.push(parse_stack.pop().unwrap());
+                    }
+                    let state = state_stack.last().unwrap();
+                    let goto = parsing_table.goto.get(&(*state, rule.lhs));
+                    match goto {
+                        Some(goto) => {
+                            state_stack.push(*goto);
+                            parse_stack.push(TerminalOrNonTerminal::NonTerminal(rule.lhs));
+                        }
+                        None => {
+                            panic!("No goto found");
+                        }
+                    }
+                }
+                Action::Accept => {
+                    break;
+                }
+            },
+            None => {
+                panic!("No action found");
+            }
+        }
+    }
+}
