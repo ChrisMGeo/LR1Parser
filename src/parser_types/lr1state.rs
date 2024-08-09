@@ -5,7 +5,10 @@ use crate::{
 };
 
 use super::{
-    lr1item::LR1Item, nonterminal::NonTerminalTrait, rule::Rule, terminal::TerminalTrait,
+    lr1item::{LR0Item, LR1Item},
+    nonterminal::NonTerminalTrait,
+    rule::Rule,
+    terminal::TerminalTrait,
     terminal_or_nonterminal::TerminalOrNonTerminal,
 };
 
@@ -119,12 +122,25 @@ pub fn generate_lr1_statemachine<
             );
 
             if !closured.is_empty() {
-                match res
-                    .clone()
-                    .iter()
-                    .find(|(_, state)| state.items == closured)
-                {
+                match res.clone().iter().find(|(_, state)| {
+                    state
+                        .items
+                        .iter()
+                        .map(|item| LR0Item {
+                            index: item.index,
+                            dot_index: item.dot_index,
+                        })
+                        .collect::<BTreeSet<LR0Item>>()
+                        == closured
+                            .iter()
+                            .map(|item| LR0Item {
+                                index: item.index,
+                                dot_index: item.dot_index,
+                            })
+                            .collect::<BTreeSet<LR0Item>>()
+                }) {
                     Some((target, _)) => {
+                        res.get_mut(target).unwrap().items.extend(closured);
                         state.transitions.insert(t_or_nt, *target);
                     }
                     None => {
