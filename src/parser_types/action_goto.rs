@@ -322,10 +322,12 @@ pub fn parse<
         + PartialOrd
         + Ord,
 >(
-    lex_stream: &Vec<Terminal>,
-    rules: &Vec<Rule<Terminal, NonTerminal>>,
+    lex_stream: &[Terminal],
+    rules: &[Rule<Terminal, NonTerminal>],
     parsing_table: &ParsingTable<Terminal, NonTerminal>,
 ) {
+    let lex_stream = lex_stream.to_owned();
+    let rules = rules.to_owned();
     let mut lex_stream = lex_stream.clone();
     let mut state_stack = vec![0];
     let mut parse_stack: Vec<TerminalOrNonTerminal<Terminal, NonTerminal>> = vec![];
@@ -334,12 +336,12 @@ pub fn parse<
         println!("{:?}", parse_stack);
         let state = state_stack.last().unwrap();
         let token = lex_stream.first().unwrap();
-        let action = parsing_table.action.get(&(state.clone(), token.clone()));
+        let action = parsing_table.action.get(&(*state, *token));
         match action {
             Some(action) => match action {
                 Action::Shift(n) => {
                     state_stack.push(*n);
-                    parse_stack.push(TerminalOrNonTerminal::Terminal(token.clone()));
+                    parse_stack.push(TerminalOrNonTerminal::Terminal(*token));
                     lex_stream.remove(0);
                 }
                 Action::Reduce(n) => {
