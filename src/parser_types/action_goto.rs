@@ -336,12 +336,12 @@ pub fn parse<
         println!("{:?}", parse_stack);
         let state = state_stack.last().unwrap();
         let token = lex_stream.first().unwrap();
-        let action = parsing_table.action.get(&(state.clone(), token.clone()));
+        let action = parsing_table.action.get(&(*state, *token));
         match action {
             Some(action) => match action {
                 Action::Shift(n) => {
                     state_stack.push(*n);
-                    parse_stack.push(TerminalOrNonTerminal::Terminal(token.clone()));
+                    parse_stack.push(TerminalOrNonTerminal::Terminal(*token));
                     lex_stream.remove(0);
                 }
                 Action::Reduce(n) => {
