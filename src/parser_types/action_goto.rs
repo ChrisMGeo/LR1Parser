@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::{
@@ -8,7 +9,7 @@ use super::{
     terminal_or_nonterminal::TerminalOrNonTerminal,
 };
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Action {
     Shift(usize),
     Reduce(usize),
@@ -24,12 +25,180 @@ impl std::fmt::Debug for Action {
     }
 }
 
-pub type ActionTable<Terminal> = BTreeMap<(usize, Terminal), Action>;
-pub type GoToTable<NonTerminal> = BTreeMap<(usize, NonTerminal), usize>;
+#[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct ActionTable<
+    Terminal: std::fmt::Debug
+        + Serialize
+        + TerminalTrait
+        + Copy
+        + Clone
+        + PartialEq
+        + std::hash::Hash
+        + Eq
+        + Ord
+        + PartialOrd,
+>(BTreeMap<(usize, Terminal), Action>);
+#[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct GoToTable<
+    NonTerminal: std::fmt::Debug
+        + Serialize
+        + NonTerminalTrait
+        + Copy
+        + Clone
+        + PartialEq
+        + std::hash::Hash
+        + Eq
+        + Ord
+        + PartialOrd,
+>(BTreeMap<(usize, NonTerminal), usize>);
 
-#[derive(Clone, PartialEq)]
+impl<
+        Terminal: std::fmt::Debug
+            + Serialize
+            + TerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > ActionTable<Terminal>
+{
+    pub fn insert(&mut self, key: (usize, Terminal), value: Action) {
+        self.0.insert(key, value);
+    }
+    pub fn get(&self, key: &(usize, Terminal)) -> Option<&Action> {
+        self.0.get(key)
+    }
+}
+impl<
+        NonTerminal: std::fmt::Debug
+            + Serialize
+            + NonTerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > GoToTable<NonTerminal>
+{
+    pub fn insert(&mut self, key: (usize, NonTerminal), value: usize) {
+        self.0.insert(key, value);
+    }
+    pub fn get(&self, key: &(usize, NonTerminal)) -> Option<&usize> {
+        self.0.get(key)
+    }
+}
+#[derive(Serialize, Deserialize)]
+struct ActionTableEntry<Terminal> {
+    key: (usize, Terminal),
+    val: Action,
+}
+#[derive(Serialize, Deserialize)]
+struct GoToTableEntry<NonTerminal> {
+    key: (usize, NonTerminal),
+    val: usize,
+}
+impl<
+        Terminal: std::fmt::Debug
+            + Serialize
+            + TerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > Serialize for ActionTable<Terminal>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_seq(self.0.iter().map(|(key, val)| ActionTableEntry {
+            key: *key,
+            val: *val,
+        }))
+    }
+}
+impl<
+        NonTerminal: std::fmt::Debug
+            + Serialize
+            + NonTerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > Serialize for GoToTable<NonTerminal>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_seq(self.0.iter().map(|(key, val)| GoToTableEntry {
+            key: *key,
+            val: *val,
+        }))
+    }
+}
+impl<
+        'de,
+        Terminal: std::fmt::Debug
+            + Deserialize<'de>
+            + Serialize
+            + TerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > Deserialize<'de> for ActionTable<Terminal>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Vec::<ActionTableEntry<Terminal>>::deserialize(deserializer)
+            .map(|mut v| ActionTable(v.drain(..).map(|kv| (kv.key, kv.val)).collect()))
+    }
+}
+impl<
+        'de,
+        NonTerminal: std::fmt::Debug
+            + Deserialize<'de>
+            + Serialize
+            + NonTerminalTrait
+            + Copy
+            + Clone
+            + PartialEq
+            + std::hash::Hash
+            + Eq
+            + Ord
+            + PartialOrd,
+    > Deserialize<'de> for GoToTable<NonTerminal>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Vec::<GoToTableEntry<NonTerminal>>::deserialize(deserializer)
+            .map(|mut v| GoToTable(v.drain(..).map(|kv| (kv.key, kv.val)).collect()))
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParsingTable<
     Terminal: std::fmt::Debug
+        + Serialize
         + TerminalTrait
         + Copy
         + Clone
@@ -39,6 +208,7 @@ pub struct ParsingTable<
         + Ord
         + PartialOrd,
     NonTerminal: std::fmt::Debug
+        + Serialize
         + NonTerminalTrait
         + Copy
         + Clone
@@ -54,6 +224,7 @@ pub struct ParsingTable<
 
 pub fn generate_parsing_table<
     Terminal: std::fmt::Debug
+        + Serialize
         + TerminalTrait
         + Copy
         + Clone
@@ -63,6 +234,7 @@ pub fn generate_parsing_table<
         + Ord
         + PartialOrd,
     NonTerminal: std::fmt::Debug
+        + Serialize
         + NonTerminalTrait
         + Copy
         + Clone
@@ -76,8 +248,8 @@ pub fn generate_parsing_table<
     precomputed_state_machine: Option<&LR1StateMachine<Terminal, NonTerminal>>,
 ) -> ParsingTable<Terminal, NonTerminal> {
     let mut res = ParsingTable {
-        action: BTreeMap::new(),
-        goto: BTreeMap::new(),
+        action: ActionTable(BTreeMap::new()),
+        goto: GoToTable(BTreeMap::new()),
     };
     let state_machine = match precomputed_state_machine {
         Some(sm) => sm.clone(),
@@ -112,6 +284,7 @@ pub fn generate_parsing_table<
 
 pub fn print_parsing_table<
     Terminal: std::fmt::Debug
+        + Serialize
         + TerminalTrait
         + Copy
         + Clone
@@ -121,6 +294,7 @@ pub fn print_parsing_table<
         + Ord
         + PartialOrd,
     NonTerminal: std::fmt::Debug
+        + Serialize
         + NonTerminalTrait
         + Copy
         + Clone
@@ -136,7 +310,7 @@ pub fn print_parsing_table<
     let mut actions_width_for_terminal = BTreeMap::new();
     let mut gotos_width = BTreeMap::new();
     let mut num_states = 0;
-    for ((state, terminal), action) in &parsing_table.action {
+    for ((state, terminal), action) in &parsing_table.action.0 {
         let action_width = format!("{:?}", action).len();
         let name_width = format!("{:?}", terminal).len();
         let to_put_width = std::cmp::max(action_width, name_width);
@@ -150,7 +324,7 @@ pub fn print_parsing_table<
         }
         num_states = std::cmp::max(num_states, *state + 1);
     }
-    for ((state, nonterminal), goto) in &parsing_table.goto {
+    for ((state, nonterminal), goto) in &parsing_table.goto.0 {
         let goto_width = format!("{:?}", goto).len();
         let name_width = format!("{:?}", nonterminal).len();
         let to_put_width = std::cmp::max(goto_width, name_width);
@@ -304,6 +478,7 @@ pub fn print_parsing_table<
 
 pub fn parse<
     Terminal: std::fmt::Debug
+        + Serialize
         + TerminalTrait
         + Copy
         + Clone
@@ -313,6 +488,7 @@ pub fn parse<
         + Ord
         + PartialOrd,
     NonTerminal: std::fmt::Debug
+        + Serialize
         + NonTerminalTrait
         + Copy
         + Clone
@@ -334,12 +510,12 @@ pub fn parse<
         println!("{:?}", parse_stack);
         let state = state_stack.last().unwrap();
         let token = lex_stream.first().unwrap();
-        let action = parsing_table.action.get(&(state.clone(), token.clone()));
+        let action = parsing_table.action.get(&(*state, *token));
         match action {
             Some(action) => match action {
                 Action::Shift(n) => {
                     state_stack.push(*n);
-                    parse_stack.push(TerminalOrNonTerminal::Terminal(token.clone()));
+                    parse_stack.push(TerminalOrNonTerminal::Terminal(*token));
                     lex_stream.remove(0);
                 }
                 Action::Reduce(n) => {

@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::parser_types::{
     nonterminal::NonTerminalTrait, rule::Rule, terminal::TerminalTrait,
     terminal_or_nonterminal::TerminalOrNonTerminal,
 };
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum Terminal {
     EOF,
     Identifier,
@@ -104,7 +106,7 @@ impl TerminalTrait for Terminal {
     }
 }
 #[allow(non_camel_case_types)]
-#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum NonTerminal {
     Start,
     PrimaryExpression,
