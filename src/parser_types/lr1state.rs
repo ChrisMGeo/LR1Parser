@@ -119,32 +119,35 @@ pub fn generate_lr1_statemachine<
             );
 
             if !closured.is_empty() {
-                if res.iter().any(|(_, state)| state.items == closured) {
-                    let target = res
-                        .iter()
-                        .find(|(_, state)| state.items == closured)
-                        .unwrap();
-                    state.transitions.insert(t_or_nt, *target.0);
-                } else {
-                    debug_println!(
-                        "goto({:?}, {:?}): {} = state: {}: {}",
-                        state.state_number,
-                        t_or_nt,
-                        format_lr1_set(rules, &kernel.to_vec()),
-                        n,
-                        format_lr1_set(rules, &closured.iter().cloned().collect::<Vec<_>>())
-                    );
-                    res.insert(
-                        n,
-                        LR1State {
-                            kernel: kernel.to_vec(),
-                            state_number: n,
-                            items: closured,
-                            transitions: BTreeMap::new(),
-                        },
-                    );
-                    state.transitions.insert(t_or_nt, n);
-                    n += 1;
+                match res
+                    .clone()
+                    .iter()
+                    .find(|(_, state)| state.items == closured)
+                {
+                    Some((target, _)) => {
+                        state.transitions.insert(t_or_nt, *target);
+                    }
+                    None => {
+                        debug_println!(
+                            "goto({:?}, {:?}): {} = state: {}: {}",
+                            state.state_number,
+                            t_or_nt,
+                            format_lr1_set(rules, &kernel.to_vec()),
+                            n,
+                            format_lr1_set(rules, &closured.iter().cloned().collect::<Vec<_>>())
+                        );
+                        res.insert(
+                            n,
+                            LR1State {
+                                kernel: kernel.to_vec(),
+                                state_number: n,
+                                items: closured,
+                                transitions: BTreeMap::new(),
+                            },
+                        );
+                        state.transitions.insert(t_or_nt, n);
+                        n += 1;
+                    }
                 }
             }
         }
