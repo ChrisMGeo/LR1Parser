@@ -31,6 +31,13 @@ pub struct LR1Item<
     pub lookahead: Terminal,
     phantom: PhantomData<NonTerminal>,
 }
+
+#[derive(Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct LR0Item {
+    pub index: usize,
+    pub dot_index: usize,
+}
+
 impl<
         Terminal: std::fmt::Debug
             + TerminalTrait
