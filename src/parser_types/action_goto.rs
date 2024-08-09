@@ -498,10 +498,12 @@ pub fn parse<
         + PartialOrd
         + Ord,
 >(
-    lex_stream: &Vec<Terminal>,
-    rules: &Vec<Rule<Terminal, NonTerminal>>,
+    lex_stream: &[Terminal],
+    rules: &[Rule<Terminal, NonTerminal>],
     parsing_table: &ParsingTable<Terminal, NonTerminal>,
 ) {
+    let lex_stream = lex_stream.to_owned();
+    let rules = rules.to_owned();
     let mut lex_stream = lex_stream.clone();
     let mut state_stack = vec![0];
     let mut parse_stack: Vec<TerminalOrNonTerminal<Terminal, NonTerminal>> = vec![];

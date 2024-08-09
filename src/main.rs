@@ -41,7 +41,7 @@ fn main() {
     let parsing_table = generate_parsing_table(&final_rules, Some(&lr1_state_machine));
     print_parsing_table(&parsing_table, 1);
     parse(
-        &vec![
+        &[
             Terminal::Int,
             Terminal::Identifier,
             Terminal::LeftParenthesis,
