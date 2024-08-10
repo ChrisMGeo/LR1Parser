@@ -122,6 +122,13 @@ pub fn generate_lr1_statemachine<
             );
 
             if !closured.is_empty() {
+                let closure_as_lr0 = closured
+                    .iter()
+                    .map(|item| LR0Item {
+                        index: item.index,
+                        dot_index: item.dot_index,
+                    })
+                    .collect::<BTreeSet<LR0Item>>();
                 match res.clone().iter().find(|(_, state)| {
                     state
                         .items
@@ -131,13 +138,7 @@ pub fn generate_lr1_statemachine<
                             dot_index: item.dot_index,
                         })
                         .collect::<BTreeSet<LR0Item>>()
-                        == closured
-                            .iter()
-                            .map(|item| LR0Item {
-                                index: item.index,
-                                dot_index: item.dot_index,
-                            })
-                            .collect::<BTreeSet<LR0Item>>()
+                        == closure_as_lr0
                 }) {
                     Some((target, _)) => {
                         res.get_mut(target).unwrap().items.extend(closured);
