@@ -95,7 +95,7 @@ pub fn generate_lr1_statemachine<
                 for item in &state.items {
                     if let Some(item_nt) = item.next_symbol(rules) {
                         if item_nt == *nt {
-                            res.insert(item.clone());
+                            res.insert(*item);
                         }
                     }
                 }
@@ -112,18 +112,13 @@ pub fn generate_lr1_statemachine<
                 rules,
                 &kernel
                     .iter()
-                    .cloned()
                     .map(|item| LR1Item::new(item.index, item.dot_index, item.lookahead))
                     .collect::<Vec<_>>(),
                 Some(&firsts),
             );
 
             if !closured.is_empty() {
-                match res
-                    .clone()
-                    .iter()
-                    .find(|(_, state)| state.items == closured)
-                {
+                match res.iter().find(|(_, state)| state.items == closured) {
                     Some((target, _)) => {
                         state.transitions.insert(t_or_nt, *target);
                     }
