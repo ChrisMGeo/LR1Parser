@@ -5,7 +5,7 @@ use super::{
     terminal_or_nonterminal::TerminalOrNonTerminal,
 };
 
-#[derive(Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct LR1Item<
     Terminal: std::fmt::Debug
         + TerminalTrait
@@ -89,7 +89,7 @@ impl<
     }
     pub fn format(&self, rules: &[Rule<Terminal, NonTerminal>]) -> String {
         let def = self.definition(rules);
-        let rhs = def.rhs.clone();
+        let rhs = &def.rhs;
         let rhs_mapped: Vec<String> = rhs
             .iter()
             .enumerate()

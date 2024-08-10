@@ -52,9 +52,9 @@ impl<
     > fmt::Debug for Rule<Terminal, NonTerminal>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rhs = self.rhs.clone();
+        let rhs = &self.rhs;
         let rhs_mapped: Vec<String> = rhs
-            .into_iter()
+            .iter()
             .map(|s| match s {
                 TerminalOrNonTerminal::Terminal(t) => format!("{:?}", t),
                 TerminalOrNonTerminal::NonTerminal(nt) => format!("{:?}", nt),

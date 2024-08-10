@@ -98,7 +98,7 @@ pub fn generate_lr1_statemachine<
                 for item in &state.items {
                     if let Some(item_nt) = item.next_symbol(rules) {
                         if item_nt == *nt {
-                            res.insert(item.clone());
+                            res.insert(*item);
                         }
                     }
                 }
@@ -115,7 +115,6 @@ pub fn generate_lr1_statemachine<
                 rules,
                 &kernel
                     .iter()
-                    .cloned()
                     .map(|item| LR1Item::new(item.index, item.dot_index, item.lookahead))
                     .collect::<Vec<_>>(),
                 Some(&firsts),
@@ -129,7 +128,7 @@ pub fn generate_lr1_statemachine<
                         dot_index: item.dot_index,
                     })
                     .collect::<BTreeSet<LR0Item>>();
-                match res.clone().iter().find(|(_, state)| {
+                match res.iter_mut().find(|(_, state)| {
                     state
                         .items
                         .iter()
@@ -140,8 +139,8 @@ pub fn generate_lr1_statemachine<
                         .collect::<BTreeSet<LR0Item>>()
                         == closure_as_lr0
                 }) {
-                    Some((target, _)) => {
-                        res.get_mut(target).unwrap().items.extend(closured);
+                    Some((target, s)) => {
+                        s.items.extend(closured);
                         state.transitions.insert(t_or_nt, *target);
                     }
                     None => {
