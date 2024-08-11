@@ -32,19 +32,19 @@ pub fn lr1_closure<
     precomputed_firsts: Option<&BTreeMap<NonTerminal, BTreeSet<Terminal>>>,
 ) -> BTreeSet<LR1Item<Terminal, NonTerminal>> {
     let first = match precomputed_firsts {
-        Some(f) => f.clone(),
-        None => compute_firsts(rules),
+        Some(f) => f,
+        None => &compute_firsts(rules),
     };
     let mut res = BTreeSet::new();
     for item in kernel {
-        res.insert(item.clone());
+        res.insert(*item);
     }
     let mut has_changed = true;
     while has_changed {
         has_changed = false;
         let mut i = 0;
         while i < res.len() {
-            let current = res.iter().nth(i).cloned().unwrap();
+            let current = res.iter().nth(i).unwrap();
             let dot_symbol = current.next_symbol(rules);
             let next_symbol = current
                 .definition(rules)
