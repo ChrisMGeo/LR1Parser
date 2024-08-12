@@ -5,8 +5,8 @@ use crate::parser_types::{
     terminal_or_nonterminal::TerminalOrNonTerminal,
 };
 
-#[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Terminal {
     EOF,
     Identifier,
@@ -105,8 +105,8 @@ impl TerminalTrait for Terminal {
         Terminal::EOF
     }
 }
-#[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum NonTerminal {
     Start,
     PrimaryExpression,
