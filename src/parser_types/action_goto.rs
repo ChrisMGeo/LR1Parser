@@ -70,27 +70,27 @@ impl<
         S: Serializer,
     {
         let mut map = serializer.serialize_map(Some(self.0.len()))?;
-        let mut prev_a = None;
+        let mut prev_state = None;
         let mut current_entry = BTreeMap::new();
-        for ((a, b), c) in &self.0 {
-            match prev_a {
-                Some(prev_a) => {
-                    if prev_a != *a {
-                        map.serialize_entry(&prev_a, &current_entry)?;
+        for ((state, terminal), action) in &self.0 {
+            match prev_state {
+                Some(prev_state) => {
+                    if prev_state != *state {
+                        map.serialize_entry(&prev_state, &current_entry)?;
                         current_entry = BTreeMap::new();
-                        current_entry.insert(*b, *c);
+                        current_entry.insert(*terminal, *action);
                     } else {
-                        current_entry.insert(*b, *c);
+                        current_entry.insert(*terminal, *action);
                     }
                 }
                 None => {
-                    current_entry.insert(*b, *c);
+                    current_entry.insert(*terminal, *action);
                 }
             }
-            prev_a = Some(*a);
+            prev_state = Some(*state);
         }
-        if let Some(prev_a) = prev_a {
-            map.serialize_entry(&prev_a, &current_entry)?;
+        if let Some(prev_state) = prev_state {
+            map.serialize_entry(&prev_state, &current_entry)?;
         }
         map.end()
     }
