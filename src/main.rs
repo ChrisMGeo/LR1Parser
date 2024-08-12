@@ -1,5 +1,5 @@
 use c99grammar::Terminal;
-use parser_types::action_goto::parse;
+use parser_types::action_goto::{parse, ParsingTable};
 use parser_utils::first::compute_firsts;
 
 use crate::{
@@ -58,4 +58,9 @@ fn main() {
         &final_rules,
         &parsing_table,
     );
+    let serialized = serde_json::to_string_pretty(&parsing_table).unwrap();
+    println!("{}", serialized);
+    let deserialized: ParsingTable<Terminal, NonTerminal> =
+        serde_json::from_str(&serialized).unwrap();
+    println!("{}", parsing_table == deserialized);
 }
