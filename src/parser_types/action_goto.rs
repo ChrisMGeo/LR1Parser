@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use super::{
@@ -63,66 +63,36 @@ impl<
             + Eq
             + Ord
             + PartialOrd,
-    > ActionTable<Terminal>
-{
-    pub fn insert(&mut self, key: (usize, Terminal), value: Action) {
-        self.0.insert(key, value);
-    }
-    pub fn get(&self, key: &(usize, Terminal)) -> Option<&Action> {
-        self.0.get(key)
-    }
-}
-impl<
-        NonTerminal: std::fmt::Debug
-            + Serialize
-            + NonTerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
-    > GoToTable<NonTerminal>
-{
-    pub fn insert(&mut self, key: (usize, NonTerminal), value: usize) {
-        self.0.insert(key, value);
-    }
-    pub fn get(&self, key: &(usize, NonTerminal)) -> Option<&usize> {
-        self.0.get(key)
-    }
-}
-#[derive(Serialize, Deserialize)]
-struct ActionTableEntry<Terminal> {
-    key: (usize, Terminal),
-    val: Action,
-}
-#[derive(Serialize, Deserialize)]
-struct GoToTableEntry<NonTerminal> {
-    key: (usize, NonTerminal),
-    val: usize,
-}
-impl<
-        Terminal: std::fmt::Debug
-            + Serialize
-            + TerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
     > Serialize for ActionTable<Terminal>
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        serializer.collect_seq(self.0.iter().map(|(key, val)| ActionTableEntry {
-            key: *key,
-            val: *val,
-        }))
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        let mut prev_a = None;
+        let mut current_entry = BTreeMap::new();
+        for ((a, b), c) in &self.0 {
+            match prev_a {
+                Some(prev_a) => {
+                    if prev_a != *a {
+                        map.serialize_entry(&prev_a, &current_entry)?;
+                        current_entry = BTreeMap::new();
+                        current_entry.insert(*b, *c);
+                    } else {
+                        current_entry.insert(*b, *c);
+                    }
+                }
+                None => {
+                    current_entry.insert(*b, *c);
+                }
+            }
+            prev_a = Some(*a);
+        }
+        if let Some(prev_a) = prev_a {
+            map.serialize_entry(&prev_a, &current_entry)?;
+        }
+        map.end()
     }
 }
 impl<
@@ -140,12 +110,32 @@ impl<
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        serializer.collect_seq(self.0.iter().map(|(key, val)| GoToTableEntry {
-            key: *key,
-            val: *val,
-        }))
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        let mut prev_state = None;
+        let mut current_entry = BTreeMap::new();
+        for ((state, non_terminal), goto_state) in &self.0 {
+            match prev_state {
+                Some(prev_state) => {
+                    if prev_state != *state {
+                        map.serialize_entry(&prev_state, &current_entry)?;
+                        current_entry = BTreeMap::new();
+                        current_entry.insert(*non_terminal, *goto_state);
+                    } else {
+                        current_entry.insert(*non_terminal, *goto_state);
+                    }
+                }
+                None => {
+                    current_entry.insert(*non_terminal, *goto_state);
+                }
+            }
+            prev_state = Some(*state);
+        }
+        if let Some(prev_state) = prev_state {
+            map.serialize_entry(&prev_state, &current_entry)?;
+        }
+        map.end()
     }
 }
 impl<
@@ -167,8 +157,18 @@ impl<
     where
         D: serde::Deserializer<'de>,
     {
-        Vec::<ActionTableEntry<Terminal>>::deserialize(deserializer)
-            .map(|mut v| ActionTable(v.drain(..).map(|kv| (kv.key, kv.val)).collect()))
+        let maps = BTreeMap::<usize, BTreeMap<Terminal, Action>>::deserialize(deserializer)?;
+        Ok(ActionTable(
+            maps.into_iter()
+                .flat_map(|(state, actions)| {
+                    let mut mapped = vec![];
+                    for (terminal, action) in actions {
+                        mapped.push(((state, terminal), action));
+                    }
+                    mapped
+                })
+                .collect(),
+        ))
     }
 }
 impl<
@@ -190,8 +190,18 @@ impl<
     where
         D: serde::Deserializer<'de>,
     {
-        Vec::<GoToTableEntry<NonTerminal>>::deserialize(deserializer)
-            .map(|mut v| GoToTable(v.drain(..).map(|kv| (kv.key, kv.val)).collect()))
+        let maps = BTreeMap::<usize, BTreeMap<NonTerminal, usize>>::deserialize(deserializer)?;
+        Ok(GoToTable(
+            maps.into_iter()
+                .flat_map(|(state, gotos)| {
+                    let mut mapped = vec![];
+                    for (non_terminal, goto_state) in gotos {
+                        mapped.push(((state, non_terminal), goto_state));
+                    }
+                    mapped
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -260,10 +270,11 @@ pub fn generate_parsing_table<
             match t_or_nt {
                 TerminalOrNonTerminal::Terminal(t) => {
                     res.action
+                        .0
                         .insert((state_index, t), Action::Shift(next_index));
                 }
                 TerminalOrNonTerminal::NonTerminal(nt) => {
-                    res.goto.insert((state_index, nt), next_index);
+                    res.goto.0.insert((state_index, nt), next_index);
                 }
             }
         }
@@ -271,9 +282,11 @@ pub fn generate_parsing_table<
             if item.next_symbol(rules).is_none() {
                 if Terminal::is_eof(&item.lookahead) && item.index == 0 {
                     res.action
+                        .0
                         .insert((state_index, Terminal::eof()), Action::Accept);
                 } else {
                     res.action
+                        .0
                         .insert((state_index, item.lookahead), Action::Reduce(item.index));
                 }
             }
@@ -437,6 +450,7 @@ pub fn print_parsing_table<
         for (terminal, width) in &actions_width_for_terminal {
             let action = parsing_table
                 .action
+                .0
                 .get(&(state, **terminal))
                 .map(|x| format!("{:?}", x))
                 .unwrap_or("".to_string());
@@ -446,6 +460,7 @@ pub fn print_parsing_table<
         for (nonterminal, width) in &gotos_width {
             let goto = parsing_table
                 .goto
+                .0
                 .get(&(state, **nonterminal))
                 .map(|x| format!("{}", x))
                 .unwrap_or("".to_string());
@@ -511,7 +526,7 @@ pub fn parse<
         println!("{:?}", parse_stack);
         let state = state_stack.last().unwrap();
         let token = lex_stream.first().unwrap();
-        let action = parsing_table.action.get(&(*state, *token));
+        let action = parsing_table.action.0.get(&(*state, *token));
         match action {
             Some(action) => match action {
                 Action::Shift(n) => {
@@ -528,7 +543,7 @@ pub fn parse<
                         popped.push(parse_stack.pop().unwrap());
                     }
                     let state = state_stack.last().unwrap();
-                    let goto = parsing_table.goto.get(&(*state, rule.lhs));
+                    let goto = parsing_table.goto.0.get(&(*state, rule.lhs));
                     match goto {
                         Some(goto) => {
                             state_stack.push(*goto);
