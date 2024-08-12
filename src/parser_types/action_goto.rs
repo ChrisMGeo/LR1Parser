@@ -1,5 +1,5 @@
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
-use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeMap, iter::Peekable};
 
 use super::{
     lr1state::{generate_lr1_statemachine, LR1StateMachine},
@@ -25,181 +25,77 @@ impl std::fmt::Debug for Action {
     }
 }
 
-#[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
-pub struct ActionTable<
-    Terminal: std::fmt::Debug
-        + Serialize
-        + TerminalTrait
-        + Copy
-        + Clone
-        + PartialEq
-        + std::hash::Hash
-        + Eq
-        + Ord
-        + PartialOrd,
->(BTreeMap<(usize, Terminal), Action>);
-#[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
-pub struct GoToTable<
-    NonTerminal: std::fmt::Debug
-        + Serialize
-        + NonTerminalTrait
-        + Copy
-        + Clone
-        + PartialEq
-        + std::hash::Hash
-        + Eq
-        + Ord
-        + PartialOrd,
->(BTreeMap<(usize, NonTerminal), usize>);
+#[derive(Clone, PartialEq, Eq)]
+pub struct TwoKeyMap<K1, K2, V>(pub BTreeMap<(K1, K2), V>);
+pub type ActionTable<Terminal> = TwoKeyMap<usize, Terminal, Action>;
+pub type GoToTable<NonTerminal> = TwoKeyMap<usize, NonTerminal, usize>;
 
-impl<
-        Terminal: std::fmt::Debug
-            + Serialize
-            + TerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
-    > Serialize for ActionTable<Terminal>
+impl<K1, K2, V> Serialize for TwoKeyMap<K1, K2, V>
+where
+    K1: Serialize + Ord,
+    K2: Serialize + Ord,
+    V: Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.0.len()))?;
-        let mut prev_state = None;
-        let mut current_entry = BTreeMap::new();
-        for ((state, terminal), action) in &self.0 {
-            match prev_state {
-                Some(prev_state) => {
-                    if prev_state != *state {
-                        map.serialize_entry(&prev_state, &current_entry)?;
-                        current_entry = BTreeMap::new();
-                        current_entry.insert(*terminal, *action);
-                    } else {
-                        current_entry.insert(*terminal, *action);
-                    }
-                }
-                None => {
-                    current_entry.insert(*terminal, *action);
-                }
-            }
-            prev_state = Some(*state);
+        let mut ser = serializer.serialize_map(None)?;
+        let mut iter = self.0.iter().map(|((k1, k2), v)| (k1, k2, v)).peekable();
+        loop {
+            let Some(&(key1, ..)) = iter.peek() else {
+                break;
+            };
+            ser.serialize_key(key1)?;
+            let map_iter = MapIter {
+                iter: RefCell::new(&mut iter),
+                key: key1,
+            };
+            ser.serialize_value(&map_iter)?;
         }
-        if let Some(prev_state) = prev_state {
-            map.serialize_entry(&prev_state, &current_entry)?;
-        }
-        map.end()
+        ser.end()
     }
 }
-impl<
-        NonTerminal: std::fmt::Debug
-            + Serialize
-            + NonTerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
-    > Serialize for GoToTable<NonTerminal>
+
+struct MapIter<'i, 'k, I, K1>
+where
+    I: Iterator,
+{
+    iter: RefCell<&'i mut Peekable<I>>,
+    key: &'k K1,
+}
+
+impl<'k, I, K1, K2, V> Serialize for MapIter<'_, 'k, I, K1>
+where
+    I: Iterator<Item = (&'k K1, &'k K2, &'k V)>,
+    K1: Eq + 'k,
+    K2: Serialize + 'k,
+    V: Serialize + 'k,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
-        let mut map = serializer.serialize_map(Some(self.0.len()))?;
-        let mut prev_state = None;
-        let mut current_entry = BTreeMap::new();
-        for ((state, non_terminal), goto_state) in &self.0 {
-            match prev_state {
-                Some(prev_state) => {
-                    if prev_state != *state {
-                        map.serialize_entry(&prev_state, &current_entry)?;
-                        current_entry = BTreeMap::new();
-                        current_entry.insert(*non_terminal, *goto_state);
-                    } else {
-                        current_entry.insert(*non_terminal, *goto_state);
-                    }
-                }
-                None => {
-                    current_entry.insert(*non_terminal, *goto_state);
-                }
-            }
-            prev_state = Some(*state);
+        let mut iter = self.iter.borrow_mut();
+        let mut ser = serializer.serialize_map(None)?;
+        while let Some((_, k2, v)) = iter.next_if(|&(k, ..)| k == self.key) {
+            ser.serialize_entry(k2, v)?;
         }
-        if let Some(prev_state) = prev_state {
-            map.serialize_entry(&prev_state, &current_entry)?;
-        }
-        map.end()
+        ser.end()
     }
 }
-impl<
-        'de,
-        Terminal: std::fmt::Debug
-            + Deserialize<'de>
-            + Serialize
-            + TerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
-    > Deserialize<'de> for ActionTable<Terminal>
+
+impl<'de, K1: Deserialize<'de> + Ord + Copy, K2: Deserialize<'de> + Ord, V: Deserialize<'de>>
+    Deserialize<'de> for TwoKeyMap<K1, K2, V>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let maps = BTreeMap::<usize, BTreeMap<Terminal, Action>>::deserialize(deserializer)?;
-        Ok(ActionTable(
+        let maps = BTreeMap::<K1, BTreeMap<K2, V>>::deserialize(deserializer)?;
+        Ok(TwoKeyMap(
             maps.into_iter()
-                .flat_map(|(state, actions)| {
-                    let mut mapped = vec![];
-                    for (terminal, action) in actions {
-                        mapped.push(((state, terminal), action));
-                    }
-                    mapped
-                })
-                .collect(),
-        ))
-    }
-}
-impl<
-        'de,
-        NonTerminal: std::fmt::Debug
-            + Deserialize<'de>
-            + Serialize
-            + NonTerminalTrait
-            + Copy
-            + Clone
-            + PartialEq
-            + std::hash::Hash
-            + Eq
-            + Ord
-            + PartialOrd,
-    > Deserialize<'de> for GoToTable<NonTerminal>
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let maps = BTreeMap::<usize, BTreeMap<NonTerminal, usize>>::deserialize(deserializer)?;
-        Ok(GoToTable(
-            maps.into_iter()
-                .flat_map(|(state, gotos)| {
-                    let mut mapped = vec![];
-                    for (non_terminal, goto_state) in gotos {
-                        mapped.push(((state, non_terminal), goto_state));
-                    }
-                    mapped
-                })
+                .flat_map(|(k1, k2vs)| k2vs.into_iter().map(move |(k2, v)| ((k1, k2), v)))
                 .collect(),
         ))
     }
@@ -258,8 +154,8 @@ pub fn generate_parsing_table<
     precomputed_state_machine: Option<&LR1StateMachine<Terminal, NonTerminal>>,
 ) -> ParsingTable<Terminal, NonTerminal> {
     let mut res = ParsingTable {
-        action: ActionTable(BTreeMap::new()),
-        goto: GoToTable(BTreeMap::new()),
+        action: TwoKeyMap(BTreeMap::new()),
+        goto: TwoKeyMap(BTreeMap::new()),
     };
     let state_machine = match precomputed_state_machine {
         Some(sm) => sm.clone(),
