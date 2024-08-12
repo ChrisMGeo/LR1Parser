@@ -10,6 +10,7 @@ use super::{
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Action {
     Shift(usize),
     Reduce(usize),
